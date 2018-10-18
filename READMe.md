@@ -2,7 +2,7 @@
 
 This repository is used to share some L2R algorithms implemted by **Python**.
 
-So far, this repository contains **RankNet** and **LambdaMART**
+So far, this repository contains **RankNet** , **LambdaRank** and **LambdaMART**
 
 
 
@@ -18,6 +18,10 @@ In order to use the interface, you should input following parameters:
 - `epoch`: int, iteration times
 - `learning_rate`: float, learning rate
 - `plot`: boolean, whether plot the loss.
+
+## LambdaRank
+
+The usage is similar with RankNet.
 
 
 
