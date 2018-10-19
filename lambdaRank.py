@@ -33,24 +33,40 @@ def ndcg(scores):
     """
     return dcg(scores)/idcg(scores)
 
+def single_dcg(scores, i, j):
+    """
+    compute the single dcg that i-th element located j-th position
+    :param scores:
+    :param i:
+    :param j:
+    :return:
+    """
+    return (np.power(2, scores[i]) - 1) / np.log2(j+2)
 
-def delta_ndcg(scores, p, q):
-    """
-    swap the i-th and j-th doucment, compute the absolute value of NDCG delta
-    :param scores: a score list of documents
-    :param p, q: the swap positions of documents
-    :return: the absolute value of NDCG delta
-    """
-    s2 = scores.copy()  # new score list
-    s2[p], s2[q] = s2[q], s2[p]  # swap
-    return abs(ndcg(s2) - ndcg(scores))
+
+# def delta_ndcg(scores, p, q, single_dcgs):
+#     """
+#     swap the i-th and j-th doucment, compute the absolute value of NDCG delta
+#     :param scores: a score list of documents
+#     :param p, q: the swap positions of documents
+#     :return: the absolute value of NDCG delta
+#     """
+#     delta = single_dcgs[(p,q)] + single_dcgs[(q,p)] - single_dcgs[(p,p)] -single_dcgs[(q,q)]
+#     s2 = scores.copy()  # new score list
+#     s2[p], s2[q] = s2[q], s2[p]  # swap
+#     return abs(ndcg(s2) - ndcg(scores))
 
 
 def ndcg_k(scores, k):
     scores_k = scores[:k]
-    fenzi = dcg(scores_k)
-    fenmu = dcg(sorted(scores)[::-1][:k])
-    return fenzi/fenmu
+    dcg_k = dcg(scores_k)
+    idcg_k = dcg(sorted(scores)[::-1][:k])
+    if idcg_k == 0:
+        return np.nan
+    return dcg_k/idcg_k
+
+
+
 
 def group_by(data, qid_index):
     """
@@ -97,8 +113,18 @@ def compute_lambda(true_scores, temp_scores, order_pairs, qid):
     doc_num = len(true_scores)
     lambdas = np.zeros(doc_num)
     w = np.zeros(doc_num)
+    IDCG = idcg(true_scores)
+    single_dcgs ={}
     for i, j in order_pairs:
-        delta = delta_ndcg(true_scores, i, j)
+        if (i, i) not in single_dcgs:
+            single_dcgs[(i, i)] = single_dcg(true_scores, i, i)
+        if (j, j) not in single_dcgs:
+            single_dcgs[(j, j)] = single_dcg(true_scores, j, j)
+        single_dcgs[(i, j)] = single_dcg(true_scores, i, j)
+        single_dcgs[(j, i)] = single_dcg(true_scores, j, i)
+
+    for i, j in order_pairs:
+        delta = abs(single_dcgs[(i,j)] + single_dcgs[(j,i)] - single_dcgs[(i,i)] -single_dcgs[(j,j)])/IDCG
         rho = 1 / (1 + np.exp(temp_scores[i] - temp_scores[j]))
         lambdas[i] += rho * delta
         lambdas[j] -= rho * delta
@@ -156,6 +182,8 @@ class LambdaRank:
         self.lr = lr
         self.trees = []
         self.model = Net(n_feature, h1_units, h2_units)
+        for para in self.model.parameters():
+            print(para[0])
 
     def fit(self):
         """
@@ -181,24 +209,20 @@ class LambdaRank:
             pred_score = [predicted_scores_numpy[qid_doc_map[qid]] for qid in query_idx]
 
             zip_parameters = zip(true_scores, pred_score, order_paris, query_idx)
-            count = 0
             for ts, ps, op, qi in zip_parameters:
-                print(count)
-                count+=1
                 sub_lambda, sub_w, qid = compute_lambda(ts, ps, op, qi)
                 lambdas[qid_doc_map[qid]] = sub_lambda
                 w[qid_doc_map[qid]] = sub_w
-            print('%d times update.....' %i)
             # update parameters
             self.model.zero_grad()
-            lambdas = torch.Tensor(lambdas).view((len(lambdas), 1))
-            predicted_scores.backward(lambdas)  # This is very important. Please understand why?
+            lambdas_torch = torch.Tensor(lambdas).view((len(lambdas), 1))
+            predicted_scores.backward(lambdas_torch, retain_graph=True)  # This is very important. Please understand why?
             with torch.no_grad():
                 for param in self.model.parameters():
                     param.data.add_(param.grad.data * self.lr)
 
 
-            if i % 10 == 0:
+            if i % 1 == 0:
                 qid_doc_map = group_by(self.training_data, 1)
                 ndcg_list = []
                 for qid in qid_doc_map.keys():
@@ -214,7 +238,7 @@ class LambdaRank:
                     true_label = true_label[pred_sort_index]
                     ndcg_val = ndcg_k(true_label, k)
                     ndcg_list.append(ndcg_val)
-                print('Epoch:{}, Average NDCG : {}'.format(i, np.mean(ndcg_list)))
+                print('Epoch:{}, Average NDCG : {}'.format(i, np.nanmean(ndcg_list)))
 
 
     def predict(self, data):
@@ -257,16 +281,16 @@ class LambdaRank:
 
 
 if __name__ == '__main__':
-    # data = load_data()
-    training_data = np.load('train data path')
+    # training_data = load_data('/Users/hou/OneDrive/KDD2019/data/L2R/sample_train2.txt')
+    training_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/train.npy')
     n_feature = training_data.shape[1] - 2
-    h1_units = 128
-    h2_units = 64
+    h1_units = 512
+    h2_units = 256
     epoch = 100
-    learning_rate = 0.01
+    learning_rate = 0.0001
     model = LambdaRank(training_data, n_feature, h1_units, h2_units, epoch, learning_rate)
     model.fit()
-    k = 4
-    test_data = np.load('test data path')
-    ndcg = model.validate(test_data, k)
-    print(ndcg)
+    # k = 4
+    # test_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/test.npy')
+    # ndcg = model.validate(test_data, k)
+    # print(ndcg)

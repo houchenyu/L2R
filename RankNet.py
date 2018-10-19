@@ -124,7 +124,6 @@ class Model(torch.nn.Module):
             torch.nn.ReLU(),
             # output
             torch.nn.Linear(h2_units, 1),
-            torch.nn.Sigmoid()
         )
         self.output_sig = torch.nn.Sigmoid()
 
@@ -152,6 +151,11 @@ class RankNet():
         self.epoch = epoch
         self.plot = plot
         self.learning_rate = learning_rate
+
+    def decay_learning_rate(self, optimizer, epoch, decay_rate):
+        if (epoch+1) % 10 == 0:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = param_group['lr'] * decay_rate
 
     def fit(self, training_data):
         """
@@ -194,6 +198,8 @@ class RankNet():
 
         print('Traning………………\n')
         for i in range(self.epoch):
+            self.decay_learning_rate(optimizer, i, 0.95)
+
             net.zero_grad()
             y_pred = net(X1, X2)
             loss = loss_fun(y_pred, y)
@@ -248,14 +254,14 @@ class RankNet():
 
 if __name__ == '__main__':
     print('Load training data...')
-    training_data = np.load('training data path')
+    training_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/train.npy')
     print('Load done.\n\n')
 
     model1 = RankNet(46, 512, 256, 100, 0.01, True)
     model1.fit(training_data)
 
     print('Validate...')
-    test_data = np.load('test data path')
+    test_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/test.npy')
     model1.validate(test_data)
 
 
