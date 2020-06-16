@@ -86,23 +86,29 @@ def get_pairs(scores):
     return pairs
 
 
-def split_pairs(order_pairs):
+def split_pairs(order_pairs, true_scores):
     """
     split the pairs into two list, named relevant_doc and irrelevant_doc.
     relevant_doc[i] is prior to irrelevant_doc[i]
 
     :param order_pairs: ordered pairs of all queries
+    :param ture_scores: scores of docs for each query
     :return: relevant_doc and irrelevant_doc
     """
     relevant_doc = []
     irrelevant_doc = []
+    doc_idx_base = 0
     query_num = len(order_pairs)
     for i in range(query_num):
         pair_num = len(order_pairs[i])
+        docs_num = len(true_scores[i])
         for j in range(pair_num):
             d1, d2 = order_pairs[i][j]
+            d1 += doc_idx_base
+            d2 += doc_idx_base
             relevant_doc.append(d1)
             irrelevant_doc.append(d2)
+        doc_idx_base += docs_num
     return relevant_doc, irrelevant_doc
 
 
@@ -174,7 +180,7 @@ class RankNet():
         for scores in true_scores:
             order_paris.append(get_pairs(scores))
 
-        relevant_doc, irrelevant_doc = split_pairs(order_paris)
+        relevant_doc, irrelevant_doc = split_pairs(order_paris ,true_scores)
         relevant_doc = training_data[relevant_doc]
         irrelevant_doc = training_data[irrelevant_doc]
 
@@ -254,14 +260,14 @@ class RankNet():
 
 if __name__ == '__main__':
     print('Load training data...')
-    training_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/train.npy')
+    training_data = np.load('./dataset/train.npy')
     print('Load done.\n\n')
 
     model1 = RankNet(46, 512, 256, 100, 0.01, True)
     model1.fit(training_data)
 
     print('Validate...')
-    test_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/test.npy')
+    test_data = np.load('./dataset/test.npy')
     model1.validate(test_data)
 
 

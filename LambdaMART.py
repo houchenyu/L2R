@@ -43,7 +43,7 @@ def ndcg(scores):
 
 #
 # def delta_ndcg(scores, p, q):
-#     """
+#     """w[i] += rho * rho_complement * delta
 #     swap the i-th and j-th doucment, compute the absolute value of NDCG delta
 #     :param scores: a score list of documents
 #     :param p, q: the swap positions of documents
@@ -128,23 +128,6 @@ def compute_lambda(true_scores, temp_scores, order_pairs, qid):
         w[i] -= rho * rho_complement * delta
 
     return lambdas, w, qid
-
-
-def load_data(file_path='/Users/hou/OneDrive/KDD2019/data/L2R/sample.txt'):
-    with open(file_path, 'r') as f:
-        data = []
-        for line in f.readlines():
-            new_arr = []
-            line_split = line.split(' ')
-            score = float(line_split[0])
-            qid = int(line_split[1].split(':')[1])
-            new_arr.append(score)
-            new_arr.append(qid)
-            for ele in line_split[2:]:
-                new_arr.append(float(ele.split(':')[1]))
-            data.append(new_arr)
-    data_np = np.array(data)
-    return data_np
 
 
 class LambdaMART:
@@ -243,11 +226,7 @@ class LambdaMART:
 
 
 if __name__ == '__main__':
-    # data = load_data()
-    training_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/train.npy')
+    training_data = np.load('./dataset/train.npy')
     model = LambdaMART(training_data, 20, 0.01)
     model.fit()
-    # k = 4
-    # test_data = load_data('/Users/hou/OneDrive/KDD2019/data/L2R/sample.txt')
-    # ndcg = model.validate(test_data, k)
-    # print(ndcg)
+
