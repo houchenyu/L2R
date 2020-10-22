@@ -131,7 +131,7 @@ def compute_lambda(true_scores, temp_scores, order_pairs, qid):
 
         rho_complement = 1.0 - rho
         w[i] += rho * rho_complement * delta
-        w[i] -= rho * rho_complement * delta
+        w[j] -= rho * rho_complement * delta
 
     return lambdas, w, qid
 
@@ -182,8 +182,8 @@ class LambdaRank:
         self.lr = lr
         self.trees = []
         self.model = Net(n_feature, h1_units, h2_units)
-        for para in self.model.parameters():
-            print(para[0])
+        # for para in self.model.parameters():
+        #     print(para[0])
 
     def fit(self):
         """
@@ -204,7 +204,7 @@ class LambdaRank:
             predicted_scores = self.model(torch.from_numpy(self.training_data[:, 2:].astype(np.float32)))
             predicted_scores_numpy = predicted_scores.data.numpy()
             lambdas = np.zeros(sample_num)
-            w = np.zeros(sample_num)
+            # w = np.zeros(sample_num)
 
             pred_score = [predicted_scores_numpy[qid_doc_map[qid]] for qid in query_idx]
 
@@ -212,7 +212,7 @@ class LambdaRank:
             for ts, ps, op, qi in zip_parameters:
                 sub_lambda, sub_w, qid = compute_lambda(ts, ps, op, qi)
                 lambdas[qid_doc_map[qid]] = sub_lambda
-                w[qid_doc_map[qid]] = sub_w
+                # w[qid_doc_map[qid]] = sub_w
             # update parameters
             self.model.zero_grad()
             lambdas_torch = torch.Tensor(lambdas).view((len(lambdas), 1))
@@ -250,10 +250,10 @@ class LambdaRank:
         qid_doc_map = group_by(data, 1)
         predicted_scores = np.zeros(len(data))
         for qid in qid_doc_map.keys():
-            sub_result = np.zeros(len(qid_doc_map[qid]))
-            for tree in self.trees:
-                sub_result += self.lr * tree.predict(data[qid_doc_map[qid], 2:])
-            predicted_scores[qid_doc_map[qid]] = sub_result
+            subset = qid_doc_map[qid]
+            X_subset = torch.from_numpy(data[subset, 2:].astype(np.float32))
+            sub_pred_score = self.model(X_subset).data.numpy().reshape(1, len(X_subset)).squeeze()
+            predicted_scores[qid_doc_map[qid]] = sub_pred_score
         return predicted_scores
 
     def validate(self, data, k):
@@ -267,13 +267,14 @@ class LambdaRank:
         ndcg_list = []
         predicted_scores = np.zeros(len(data))
         for qid in qid_doc_map.keys():
-            sub_pred_result = np.zeros(len(qid_doc_map[qid]))
-            for tree in self.trees:
-                sub_pred_result += self.lr * tree.predict(data[qid_doc_map[qid], 2:])
-            predicted_scores[qid_doc_map[qid]] = sub_pred_result
+            subset = qid_doc_map[qid]
+            X_subset = torch.from_numpy(data[subset, 2:].astype(np.float32))
+            sub_pred_score = self.model(X_subset).data.numpy().reshape(1, len(X_subset)).squeeze()
+
             # calculate the predicted NDCG
             true_label = data[qid_doc_map[qid], 0]
-            pred_sort_index = np.argsort(sub_pred_result)[::-1]
+            k = len(true_label)
+            pred_sort_index = np.argsort(sub_pred_score)[::-1]
             true_label = true_label[pred_sort_index]
             ndcg_val = ndcg_k(true_label, k)
             ndcg_list.append(ndcg_val)
@@ -282,15 +283,15 @@ class LambdaRank:
 
 if __name__ == '__main__':
     # training_data = load_data('/Users/hou/OneDrive/KDD2019/data/L2R/sample_train2.txt')
-    training_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/train.npy')
+    training_data = np.load('./dataset/train.npy')
     n_feature = training_data.shape[1] - 2
     h1_units = 512
     h2_units = 256
-    epoch = 100
+    epoch = 10
     learning_rate = 0.0001
     model = LambdaRank(training_data, n_feature, h1_units, h2_units, epoch, learning_rate)
     model.fit()
-    # k = 4
-    # test_data = np.load('/Users/hou/OneDrive/KDD2019/data/L2R/test.npy')
-    # ndcg = model.validate(test_data, k)
-    # print(ndcg)
+    k = 4
+    test_data = np.load('./dataset/test.npy')
+    ndcg = model.validate(test_data, k)
+    print(ndcg)

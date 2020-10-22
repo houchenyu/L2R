@@ -230,3 +230,7 @@ if __name__ == '__main__':
     model = LambdaMART(training_data, 20, 0.01)
     model.fit()
 
+    k = 4
+    test_data = np.load('./dataset/test.npy')
+    ndcg = model.validate(test_data, k)
+    print(ndcg)
